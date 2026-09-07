@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>scan_descriptor</name>
+  <version>0.1.0</version>
+  <description>License-clean polar scan descriptors shared by mapping and localization.</description>
+  <maintainer email="dev@genisom.local">Genisom</maintainer>
+  <license>BSD-3-Clause</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>eigen3_cmake_module</buildtool_depend>
+  <depend>eigen3_cmake_module</depend>
+  <depend>eigen</depend>
+  <test_depend>ament_cmake_gtest</test_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

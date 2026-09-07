@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>anubis_mapping</name>
+  <version>0.1.0</version>
+  <description>
+    FAST-LIO based mapping for Anubis. Built by bulk-copying darmawan_ws's
+    proven modules (vendored FAST-LIO2/ikd-Tree/MTK core + custom
+    lio_time_guard/imu_init_gate/keyframe_store/loop_closure/
+    map_z_drift_correction/map_leveling_sidecar/map_artifact_digest/
+    map_artifact_transaction/pcd2grid) with a single namespace update
+    (robot::slam -> anubis_mapping), verified by porting each module's
+    existing test alongside it. mapping_alg.cpp/.h (the orchestrating
+    node) was rewritten from ArUco to AprilTag (apriltag_msgs), using a
+    TF lookup for the tag pose instead of a hand-maintained
+    lidar-to-camera extrinsic matrix. See README.md for the full
+    porting/verification log.
+  </description>
+  <maintainer email="you@example.com">Agus Darmawan</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
+  <depend>apriltag_msgs</depend>
+  <depend>anubis_interfaces</depend>
+  <depend>eigen</depend>
+  <depend>pcl_conversions</depend>
+  <depend>libpcl-all-dev</depend>
+  <depend>scan_descriptor</depend>
+
+  <!-- Not a standard rosdep key on all platforms -- installed directly
+       via apt in the workspace Dockerfile: libgtsam-dev, libssl-dev.
+       apriltag_msgs/apriltag_ros: apt install ros-humble-apriltag
+       ros-humble-apriltag-ros (see anubis_perception). -->
+
+  <test_depend>ament_cmake_gtest</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
