@@ -12,12 +12,17 @@ find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
+find_package(visualization_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(apriltag_msgs REQUIRED)
 find_package(anubis_interfaces REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common io filters kdtree search)
+find_package(pcl_conversions REQUIRED)
+find_package(pcl_ros REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(OpenMP REQUIRED)
 find_package(scan_descriptor REQUIRED)
@@ -27,6 +32,34 @@ find_package(scan_descriptor REQUIRED)
 # they were installed (apt: libgtsam-dev, libssl-dev). See package.xml.
 find_package(GTSAM REQUIRED)
 find_package(OpenSSL REQUIRED)
+
+# [PATCH -- fixes a real class of build error, not a style preference]
+# darmawan_ws's own CMakeLists.txt defines ONE shared dependency list and
+# applies it to every single target uniformly, rather than a precise
+# per-target list. This package initially tried the "precise" approach
+# instead, and it kept surfacing one missing dependency at a time across
+# several real colcon builds (pcl_conversions, nav_msgs, sensor_msgs on
+# pcd2grid_node; rclcpp on a test target that directly includes
+# pcd2grid.h; etc.) -- each miss only visible by actually compiling on a
+# real ROS2 install, which the environment used to write this package
+# did not have. Matching the original's "one list, apply everywhere"
+# pattern trades a small amount of precision (some targets link a few
+# packages they don't strictly use) for not repeating that same class of
+# error target-by-target.
+set(ANUBIS_MAPPING_ROS_DEPS
+  rclcpp
+  geometry_msgs
+  nav_msgs
+  sensor_msgs
+  std_msgs
+  std_srvs
+  visualization_msgs
+  tf2
+  tf2_ros
+  pcl_conversions
+  apriltag_msgs
+  anubis_interfaces
+)
 
 include_directories(
   include
@@ -86,7 +119,7 @@ target_link_libraries(pcd2grid_node
   ${PCL_LIBRARIES}
   ${OpenCV_LIBRARIES}
 )
-ament_target_dependencies(pcd2grid_node rclcpp nav_msgs sensor_msgs)
+ament_target_dependencies(pcd2grid_node ${ANUBIS_MAPPING_ROS_DEPS})
 
 
 # ------------------------------------------------------------------------
@@ -108,16 +141,7 @@ target_link_libraries(mapping_alg_node
   ${PCL_LIBRARIES}
   OpenMP::OpenMP_CXX
 )
-ament_target_dependencies(mapping_alg_node
-  rclcpp
-  sensor_msgs
-  nav_msgs
-  geometry_msgs
-  tf2_ros
-  tf2
-  apriltag_msgs
-  anubis_interfaces
-)
+ament_target_dependencies(mapping_alg_node ${ANUBIS_MAPPING_ROS_DEPS})
 
 install(TARGETS anubis_mapping_lio_core anubis_mapping_modules pcd2grid_node mapping_alg_node
   ARCHIVE DESTINATION lib
@@ -180,6 +204,7 @@ if(BUILD_TESTING)
   ament_add_gtest(test_pcd2grid_free_space test/pcd2grid_free_space_test.cpp
     src/pcd2grid_ground_plane.cpp)
   target_link_libraries(test_pcd2grid_free_space ${PCL_LIBRARIES} ${OpenCV_LIBRARIES})
+  ament_target_dependencies(test_pcd2grid_free_space ${ANUBIS_MAPPING_ROS_DEPS})
 endif()
 
 ament_export_include_directories(include)
