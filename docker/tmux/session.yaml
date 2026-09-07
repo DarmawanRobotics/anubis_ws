@@ -1,0 +1,22 @@
+session_name: __WORKSPACE_NAME__
+start_directory: /home/__USERNAME__/__WORKSPACE_NAME__
+windows:
+  - window_name: __WORKSPACE_NAME__
+    layout: tiled
+    panes:
+      - shell_command:
+          - source /opt/ros/humble/setup.bash
+          - clear
+      - shell_command:
+          - source /opt/ros/humble/setup.bash
+          - watch -n 2 ros2 node list
+      - shell_command:
+          - source /opt/ros/humble/setup.bash
+      - shell_command:
+          - cd /home/__USERNAME__/__WORKSPACE_NAME__/src
+          - source /opt/ros/humble/setup.bash
+      - shell_command:
+          - htop
+      - start_directory: /home/__USERNAME__/.vnc
+        shell_command:
+          - "sleep 2 && tail -f *.log 2>/dev/null || bash"

@@ -1,0 +1,43 @@
+services:
+  ws:
+    build:
+      context: ./docker
+      args:
+        USERNAME: ${USERNAME:-devuser}
+        USER_UID: ${USER_UID:-1000}
+        USER_GID: ${USER_GID:-1000}
+        WORKSPACE_NAME: ${WORKSPACE_NAME:-ros2_ws}
+    image: ${WORKSPACE_NAME:-ros2_ws}:dev
+    container_name: ${WORKSPACE_NAME:-ros2_ws}_dev
+    hostname: ${WORKSPACE_NAME:-ros2-ws}
+    environment:
+      USERNAME: ${USERNAME:-devuser}
+      LINUX_PASSWORD: ${LINUX_PASSWORD:-changeme}
+      SSH_PASSWORD_AUTH: ${SSH_PASSWORD_AUTH:-yes}
+      VNC_RESOLUTION: ${VNC_RESOLUTION:-1920x1080}
+      VNC_DEPTH: ${VNC_DEPTH:-24}
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      # Add project-specific env vars here, e.g.:
+      # MY_ROBOT: ${MY_ROBOT:-default_value}
+    volumes:
+      - .:/home/${USERNAME:-devuser}/${WORKSPACE_NAME:-ros2_ws}
+      - rosdep-cache:/home/${USERNAME:-devuser}/.ros
+      # - ~/.ssh/id_rsa.pub:/home/${USERNAME:-devuser}/.ssh/authorized_keys:ro   # optional: pubkey login
+      # - ~/.ssh/id_rsa:/home/${USERNAME:-devuser}/.ssh/id_rsa:ro               # optional: buat git submodule pull pakai ssh key kamu
+    ports:
+      # localhost-only, same rationale as SSH below — docs already say to
+      # point a VNC client at localhost:5901, and VNC shares LINUX_PASSWORD
+      # with the Linux login, so it deserves the same exposure limit.
+      - "127.0.0.1:${VNC_PORT:-5901}:5901"
+      # localhost-only: this repo's SSH workflow only ever connects via
+      # localhost anyway (see dev.sh). Only applies in bridge mode — under
+      # docker-compose.linux.yml's network_mode: host, this mapping is
+      # ignored entirely and sshd is reachable on every host interface.
+      - "127.0.0.1:${SSH_PORT:-2222}:2222"
+    shm_size: "1gb"
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+volumes:
+  rosdep-cache:

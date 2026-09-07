@@ -1,0 +1,38 @@
+# ---- env / secrets ----
+.env
+*.pem
+*.key
+
+# ---- ROS2 / colcon build artifacts ----
+build/
+install/
+log/
+**/COLCON_IGNORE
+
+# ---- rosbag recordings ----
+*.bag
+*.db3
+*_bag/
+rosbag2_*/
+
+# ---- python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ---- editors ----
+.idea/
+*.swp
+*.swo
+# NOTE: .vscode/ is intentionally tracked (shared workspace settings) — do not ignore it
+
+# ---- OS junk ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- misc ----
+*.log
+.cache/

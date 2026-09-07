@@ -1,0 +1,26 @@
+{
+  // Attaches VSCode to the same "ws" service defined in ../docker-compose.yml
+  // — no separate container, no separate build. Requires .env to already
+  // exist (run ./scripts/init.sh first).
+  //
+  // workspaceFolder/remoteUser below assume the .env.example defaults
+  // (USERNAME=devuser, WORKSPACE_NAME=ros2_ws). If you changed either in
+  // .env, update both fields to match.
+  "name": "ros2-humble-devbox",
+  "dockerComposeFile": ["../docker-compose.yml"],
+  "service": "ws",
+  "workspaceFolder": "/home/devuser/ros2_ws",
+  "remoteUser": "devuser",
+  // Don't stop the container when the VSCode window closes — it's meant
+  // to keep running so `./scripts/dev.sh ssh`/`tmux` can also attach to it.
+  "shutdownAction": "none",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-iot.vscode-ros",
+        "ms-vscode.cpptools",
+        "ms-python.python"
+      ]
+    }
+  }
+}
