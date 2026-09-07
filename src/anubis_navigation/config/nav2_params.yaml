@@ -1,0 +1,422 @@
+bt_navigator:
+  ros__parameters:
+    use_sim_time: True
+    global_frame: map
+    robot_base_frame: base_link
+    odom_topic: /odom
+    bt_loop_duration: 10
+    default_server_timeout: 20
+    wait_for_service_timeout: 1000
+    transform_tolerance: 1.0
+    # 'default_nav_through_poses_bt_xml' and 'default_nav_to_pose_bt_xml' are use defaults:
+    # nav2_bt_navigator/navigate_to_pose_w_replanning_and_recovery.xml
+    # nav2_bt_navigator/navigate_through_poses_w_replanning_and_recovery.xml
+    # They can be set here or via a RewrittenYaml remap from a parent launch file to Nav2.
+    navigators: ['navigate_to_pose', 'navigate_through_poses']
+    navigate_to_pose:
+      plugin: "nav2_bt_navigator::NavigateToPoseNavigator"
+      enable_groot_monitoring: false
+      groot_server_port: 1667
+    navigate_through_poses:
+      plugin: "nav2_bt_navigator::NavigateThroughPosesNavigator"
+      enable_groot_monitoring: false
+      groot_server_port: 1669
+    plugin_lib_names:
+      - nav2_compute_path_to_pose_action_bt_node
+      - nav2_compute_path_through_poses_action_bt_node
+      - nav2_smooth_path_action_bt_node
+      - nav2_follow_path_action_bt_node
+      - nav2_spin_action_bt_node
+      - nav2_wait_action_bt_node
+      - nav2_assisted_teleop_action_bt_node
+      - nav2_back_up_action_bt_node
+      - nav2_drive_on_heading_bt_node
+      - nav2_clear_costmap_service_bt_node
+      - nav2_is_stuck_condition_bt_node
+      - nav2_goal_reached_condition_bt_node
+      - nav2_goal_updated_condition_bt_node
+      - nav2_globally_updated_goal_condition_bt_node
+      - nav2_is_path_valid_condition_bt_node
+      - nav2_initial_pose_received_condition_bt_node
+      - nav2_reinitialize_global_localization_service_bt_node
+      - nav2_rate_controller_bt_node
+      - nav2_distance_controller_bt_node
+      - nav2_speed_controller_bt_node
+      - nav2_truncate_path_action_bt_node
+      - nav2_truncate_path_local_action_bt_node
+      - nav2_goal_updater_node_bt_node
+      - nav2_recovery_node_bt_node
+      - nav2_pipeline_sequence_bt_node
+      - nav2_round_robin_node_bt_node
+      - nav2_transform_available_condition_bt_node
+      - nav2_time_expired_condition_bt_node
+      - nav2_path_expiring_timer_condition
+      - nav2_distance_traveled_condition_bt_node
+      - nav2_single_trigger_bt_node
+      - nav2_goal_updated_controller_bt_node
+      - nav2_is_battery_low_condition_bt_node
+      - nav2_navigate_through_poses_action_bt_node
+      - nav2_navigate_to_pose_action_bt_node
+      - nav2_remove_passed_goals_action_bt_node
+      - nav2_planner_selector_bt_node
+      - nav2_path_controller_selector_bt_node
+      - nav2_goal_checker_selector_bt_node
+      - nav2_path_controller_cancel_bt_node
+      - nav2_path_longer_on_approach_bt_node
+      - nav2_wait_cancel_bt_node
+      - nav2_spin_cancel_bt_node
+      - nav2_back_up_cancel_bt_node
+      - nav2_assisted_teleop_cancel_bt_node
+      - nav2_drive_on_heading_cancel_bt_node
+      - nav2_is_battery_charging_condition_bt_node
+
+bt_navigator_navigate_through_poses_rclcpp_node:
+  ros__parameters:
+    use_sim_time: True
+
+bt_navigator_navigate_to_pose_rclcpp_node:
+  ros__parameters:
+    use_sim_time: True
+
+behavior_server:
+  ros__parameters:
+    costmap_topic: local_costmap/costmap_raw
+    footprint_topic: local_costmap/published_footprint
+    cycle_frequency: 10.0
+    behavior_plugins: ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait"]
+    spin:
+      plugin: "nav2_behaviors/Spin"
+    backup:
+      plugin: "nav2_behaviors/BackUp"
+    drive_on_heading:
+      plugin: "nav2_behaviors/DriveOnHeading"
+    wait:
+      plugin: "nav2_behaviors/Wait"
+    assisted_teleop:
+      plugin: "nav2_behaviors/AssistedTeleop"
+    # anubis_control (genisom_l1_sdk) publishes odom->base_link directly
+    # from the SDK's onboard odometry; recovery behaviors use this
+    # continuous local odom frame. map->odom can be corrected by
+    # localization, so it is not suitable as the frame for local
+    # collision checks during backup/spin.
+    global_frame: odom
+    robot_base_frame: base_link
+    transform_tolerance: 1.0
+    use_sim_time: true
+    simulate_ahead_time: 2.0
+    max_rotational_vel: 1.0
+    min_rotational_vel: 0.4
+    rotational_acc_lim: 3.2
+
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      update_frequency: 5.0
+      publish_frequency: 2.0
+      # Real-time local obstacles use anubis_control's continuous SDK
+      # odom. Global planning still uses map; the two connect via the
+      # map->odom transform published by anubis_localization.
+      global_frame: odom
+      robot_base_frame: base_link
+      use_sim_time: True
+      rolling_window: true
+      width: 8
+      height: 8
+      resolution: 0.05
+      # ZSL-1W standing outline 610x370mm; base_link restored to the
+      # body center means the outline should be symmetric about the
+      # origin. The original value [[0.190,+-0.185],[-0.420,+-0.185]]
+      # was an asymmetric compensation from treating the LiDAR pose
+      # directly as base_link; now that base_link->livox_frame carries
+      # the real mounting extrinsic, that compensation must not be
+      # applied a second time.
+      footprint: "[[0.305,0.185],[0.305,-0.185],[-0.305,-0.185],[-0.305,0.185]]"
+      footprint_padding: 0.03
+      plugins: ["obstacle_layer", "inflation_layer"]
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        # [2026-08-21] Original value 1.8; lowered to 1.0 so obstacle
+        # cost decays more slowly, biasing paths toward corridor centers.
+        cost_scaling_factor: 1.0
+        # [2026-08-21] Original value 0.35m; changed to 0.25m to shrink
+        # the obstacle-cost zone on either side of narrow doorways.
+        # footprint and padding are unchanged -- the actual collision
+        # boundary is still checked against the robot's real outline.
+        inflation_radius: 0.25
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        footprint_clearing_enabled: true
+        observation_persistence: 0.0
+        # ObstacleLayer re-filters by the same odom.z window after the
+        # ObservationBuffer; the two stages must agree. The SDK odom's
+        # ground is approximately z=0, so ground clearance height is
+        # used directly.
+        min_obstacle_height: 0.05
+        max_obstacle_height: 0.60
+        # Mid-360 driver publishes PointCloud2 directly; anubis_sensors
+        # remaps it to /sensors/lidar/points (see
+        # anubis_sensors/launch/lidar.launch.py) so the dynamic obstacle
+        # layer has real input as soon as the physical sensors are up.
+        observation_sources: livox
+        livox:
+          topic: /sensors/lidar/points
+          sensor_frame: livox_frame
+          expected_update_rate: 0.0
+          # Points are transformed to local_costmap.global_frame=odom
+          # first, then filtered by z. [0.05,0.60]m excludes the floor
+          # and doorframes while keeping low obstacles the robot could
+          # actually hit. Original value was [-0.35,2.0]m; a 2026-08-20
+          # attempt at absolute map-frame height [-0.254,0.296]m
+          # mis-captured floor points after that day's map/localization
+          # ground-Z shift.
+          min_obstacle_height: 0.05
+          max_obstacle_height: 0.60
+          clearing: True
+          marking: True
+          inf_is_valid: false
+          data_type: "PointCloud2"
+          raytrace_max_range: 8.5
+          raytrace_min_range: 0.0
+          obstacle_max_range: 8.5
+          # [PATCH -- verify against the new mounting extrinsic] Original
+          # value 0.15m, reasoned from the OLD lidar_to_base_T
+          # (x=+0.220m) vs. the standing outline's front edge
+          # (x=+0.305m) -- an ~0.085m gap that would leave a ~0.065m
+          # blind spot outside the body. This robot's REAL LiDAR mount
+          # (anubis_description/sensors.xacro) is a different offset
+          # (x=+0.13011m) -- the gap-to-outline reasoning behind this
+          # 0.10m value needs to be redone against that real position,
+          # not assumed carried over correctly.
+          obstacle_min_range: 0.10
+          # [PATCH -- verify against the new mounting extrinsic] These
+          # self-filter bounds were tuned against two specific observed
+          # self-collision points under the OLD extrinsic: [0.265,-0.258,
+          # 0.061]m and [0.255,0.201,0.118]m (the robot's own body/leg
+          # echoes that were causing MPPI collisions near doorways).
+          # Because the LiDAR's real mounting position differs from what
+          # these bounds were tuned against, the robot's own legs/body
+          # will appear at different points in this LiDAR's frame now --
+          # re-verify these bounds against a live point cloud on the
+          # real robot before trusting them.
+          self_filter_enabled: true
+          self_filter_min_x: 0.15
+          self_filter_max_x: 0.34
+          self_filter_min_y: -0.28
+          self_filter_max_y: 0.28
+          self_filter_min_z: 0.02
+          self_filter_max_z: 0.20
+          self_filter_max_sensor_range: 0.32
+      always_send_full_costmap: True
+  local_costmap_client:
+    ros__parameters:
+      use_sim_time: False
+  local_costmap_rclcpp_node:
+    ros__parameters:
+      use_sim_time: False
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      update_frequency: 10.0
+      publish_frequency: 10.0
+      global_frame: map
+      robot_base_frame: base_link
+      use_sim_time: True
+      # Kept identical to local_costmap (see the ZSL-1W/Mid-360 notes above)
+      footprint: "[[0.305,0.185],[0.305,-0.185],[-0.305,-0.185],[-0.305,0.185]]"
+      footprint_padding: 0.03
+      resolution: 0.05
+      track_unknown_space: true
+      plugins: ["static_layer", "inflation_layer"]
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: False
+        footprint_clearing_enabled: True
+        restore_cleared_footprint: True
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        # Matches local_costmap: strengthen "closer to the wall = more
+        # expensive" so Navfn doesn't hug walls with the shortest path.
+        # [2026-08-21] Synced with local_costmap: 1.8 -> 1.0, reinforcing
+        # the global path's tendency to stay centered.
+        cost_scaling_factor: 1.0
+        # [2026-08-21] Original value 0.35m; synced with local_costmap to 0.25m.
+        inflation_radius: 0.25
+      always_send_full_costmap: True
+
+map_server:
+  ros__parameters:
+    use_sim_time: False
+    yaml_filename: " "
+
+map_saver:
+  ros__parameters:
+    use_sim_time: False
+    save_map_timeout: 5.0
+    free_thresh_default: 0.25
+    occupied_thresh_default: 0.65
+    map_subscribe_transient_local: True
+
+planner_server:
+  ros__parameters:
+    expected_planner_frequency: 20.0
+    odom_topic: /odom
+    use_sim_time: True
+    planner_plugins: ["GridBased"]
+    GridBased:
+      plugin: "nav2_navfn_planner/NavfnPlanner"
+      tolerance: 0.5
+      use_astar: false
+      allow_unknown: true
+
+controller_server:
+  ros__parameters:
+    controller_frequency: 30.0
+    odom_topic: "/odom"
+    progress_checker_plugin: "progress_checker"
+    goal_checker_plugins: ["general_goal_checker"] # "precise_goal_checker"
+    controller_plugins: ["FollowPath"]
+
+    # Progress checker parameters
+    progress_checker:
+      plugin: "nav2_path_controller::SimpleProgressChecker"
+      required_movement_radius: 0.5
+      movement_time_allowance: 10.0
+    # Goal checker parameters
+    #precise_goal_checker:
+    #  plugin: "nav2_path_controller::SimpleGoalChecker"
+    #  xy_goal_tolerance: 0.25
+    #  yaw_goal_tolerance: 0.25
+    #  stateful: True
+    general_goal_checker:
+      stateful: True
+      plugin: "nav2_path_controller::SimpleGoalChecker"
+      xy_goal_tolerance: 0.25
+      yaw_goal_tolerance: 0.25
+    # MPPI parameters
+    FollowPath:
+      plugin: "nav2_mppi_controller::MPPIController"
+      visualize: true
+      time_steps: 56
+      model_dt: 0.05
+      batch_size: 2000
+      vx_std: 0.2
+      vy_std: 0.2
+      wz_std: 0.4
+      vx_max: 0.6
+      vx_min: -0.6
+      vy_max: 0.0
+      wz_max: 1.0
+      # Compatibility-only keys: the current MPPI ControlConstraints model does
+      # not read acceleration fields. Effective acceleration limiting is configured
+      # under velocity_smoother.max_accel / max_decel below.
+      ax_max: 2.0
+      ay_max: 2.0
+      ax_min: -2.0
+      az_max: 2.0
+      iteration_count: 1
+      prune_distance: 2.0   #1.7
+      transform_tolerance: 1.0
+      temperature: 0.3
+      gamma: 0.015 #0.015
+      motion_model: "DiffDrive"
+      visualize_all_sampled_traj: false
+      visualize_optimized_traj: true
+      TrajectoryVisualizer:
+        trajectory_step: 5
+        time_step: 3
+      AckermannConstraints:
+        min_turning_r: 0.1667
+      critics: [ "ConstraintCritic", "CostCritic", "GoalCritic", "PathAlignCritic", "GoalAngleCritic", "PathFollowCritic", "PathAngleCritic", "PreferForwardCritic" ] #
+      ConstraintCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 4.0
+      GoalCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        threshold_to_consider: 1.4
+      GoalAngleCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 3.0
+        threshold_to_consider: 0.5
+      PreferForwardCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        threshold_to_consider: 0.5
+      CostCritic:
+        enabled: true
+        cost_power: 2
+        cost_weight: 3.81
+        critical_cost: 300.0
+        consider_footprint: true
+        collision_cost: 1000000.0
+        near_goal_distance: 1.0
+        trajectory_point_step: 2
+      PathAlignCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 14.0 #14.0
+        max_path_occupancy_ratio: 0.05
+        trajectory_point_step: 4
+        threshold_to_consider: 0.5
+        offset_from_furthest: 20
+        use_path_orientations: false
+      PathFollowCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0 # 25
+        offset_from_furthest: 5
+        threshold_to_consider: 1.4
+      PathAngleCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 2.0
+        offset_from_furthest: 4
+        threshold_to_consider: 0.5
+        max_angle_to_furthest: 1.0
+        mode: 0
+        forward_preference: true
+
+
+smoother_server:
+  ros__parameters:
+    use_sim_time: False
+    smoother_plugins: [ "simple_smoother" ]
+    simple_smoother:
+      plugin: "nav2_smoother::SimpleSmoother"
+      tolerance: 1.0e-10
+      max_its: 1000
+      do_refinement: True
+
+waypoint_follower:
+  ros__parameters:
+    use_sim_time: True
+    odom_topic: /odom
+    loop_rate: 20
+    stop_on_failure: false
+    waypoint_task_executor_plugin: "wait_at_waypoint"
+    wait_at_waypoint:
+      plugin: "nav2_waypoint_follower::WaitAtWaypoint"
+      enabled: True
+      waypoint_pause_duration: 200
+
+velocity_optimizer:
+  ros__parameters:
+    smoothing_frequency: 20.0
+    scale_velocities: false
+    feedback: "OPEN_LOOP"
+    max_velocity: [0.6, 0.0, 1.0]
+    min_velocity: [-0.6, 0.0, -1.0]
+    deadband_velocity: [0.0, 0.0, 0.0]
+    velocity_timeout: 1.0
+    max_accel: [1.5, 1.0, 1.5]
+    max_decel: [-1.5, -1.0, -1.5]
+    odom_topic: "/odom"
+    odom_duration: 0.1
+    use_realtime_priority: false
+    enable_stamped_cmd_vel: false

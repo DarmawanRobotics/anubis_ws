@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>anubis_navigation</name>
+  <version>0.1.0</version>
+  <description>
+    Nav2 configuration for Anubis -- tuned params.yaml (footprint, MPPI
+    controller, costmap self-filtering) on top of unmodified, apt-installed
+    Nav2 (ros-humble-navigation2 + ros-humble-nav2-bringup). Contains no
+    Nav2 source of its own: darmawan_ws's 14 forked Nav2 packages
+    (navigo_bt_navigator, navigo_costmap_2d, etc.) turned out to be
+    unmodified renamed copies of upstream Nav2, so there was nothing in
+    the fork worth preserving -- only the tuned params.yaml this package
+    carries. See README.md.
+  </description>
+  <maintainer email="you@example.com">Agus Darmawan</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>navigation2</exec_depend>
+  <exec_depend>nav2_bringup</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
