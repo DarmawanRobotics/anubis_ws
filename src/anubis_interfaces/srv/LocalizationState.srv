@@ -1,0 +1,6 @@
+# Query the current localization state on demand (as opposed to the
+# continuous Localization.msg stream on a topic).
+uint8 data
+---
+bool success
+string message

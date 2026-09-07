@@ -1,0 +1,5 @@
+# Loads a previously-saved map (.pcd) into anubis_localization.
+string pcd_path
+---
+bool success
+string message
