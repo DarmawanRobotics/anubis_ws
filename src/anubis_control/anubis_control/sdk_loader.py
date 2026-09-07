@@ -20,7 +20,6 @@ DEFAULT_SDK_DIR = "/opt/genisom_l1_sdk"
 class SdkLoadError(RuntimeError):
     """Raised when the SDK module cannot be located or imported."""
 
-
 @dataclass
 class SdkHandle:
     module: object
