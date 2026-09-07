@@ -41,7 +41,6 @@ from anubis_control.math_utils import (
     localization_allows_motion,
     normalize_battery_percentage,
     rpy_to_quaternion,
-    world_velocity_to_body,
     wrapped_yaw_rate,
 )
 from anubis_control.sdk_loader import SdkLoadError, load_sdk

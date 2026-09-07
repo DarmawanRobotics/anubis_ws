@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  
+  <xacro:macro name="livox_mid360">
+    <link name="livox_frame"/>
+    <joint name="livox_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="livox_frame"/>
+      <origin
+        xyz="0.13011 -0.02329 0.17598"
+        rpy="0 0 0"/>
+    </joint>
+    <link name="livox_imu_frame"/>
+    <joint name="livox_imu_joint" type="fixed">
+      <parent link="livox_frame"/>
+      <child link="livox_imu_frame"/>
+      <origin
+        xyz="0.011 0.02329 -0.04412"
+        rpy="0 0 0"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:macro name="realsense_d435i">
+    <link name="camera_link"/>
+    <joint name="camera_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="camera_link"/>
+      <origin
+        xyz="0.2606 0.0175 0.1085"
+        rpy="0 0.1745 0"/>
+    </joint>
+  </xacro:macro>
+
+</robot>
