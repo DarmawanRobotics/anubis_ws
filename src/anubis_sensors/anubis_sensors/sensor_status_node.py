@@ -55,9 +55,9 @@ class SensorStatusNode(Node):
         self.sensors = [
             SensorMonitor(self, "Front LiDAR", "/front_lidar", PointCloud2, 1.0),
             SensorMonitor(self, "Front LiDAR IMU", "/front_lidar/imu", Imu, 1.0),
-            SensorMonitor(self, "Front Camera", "/camera/color/image_raw", Image, 1.0),
-            SensorMonitor(self, "Front Camera Info", "/camera/color/camera_info", CameraInfo, 1.0),
-            SensorMonitor(self, "Front Depth", "/camera/aligned_depth_to_color/image_raw", Image, 1.0),
+            SensorMonitor(self, "Front Camera", "/camera/camera/color/image_raw", Image, 1.0),
+            SensorMonitor(self, "Front Camera Info", "/camera/camera/color/camera_info", CameraInfo, 1.0),
+            SensorMonitor(self, "Front Depth", "/camera/camera/aligned_depth_to_color/image_raw", Image, 1.0),
         ]
         for sensor in self.sensors:
             self.updater.add(sensor.name, sensor.diagnostic)

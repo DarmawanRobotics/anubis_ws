@@ -1,5 +1,10 @@
 
 std_msgs/Header header       # timestamp is when the measurement was taken
+string type                  # message type -- localization_nodelet.cpp sets
+                              # this to "loc_state" (fixed value) on every
+                              # publish; kept for wire-compatibility with
+                              # consumers checking it, not currently used to
+                              # distinguish multiple message kinds
 
 uint8 STATUS_INITIALIZING = 0
 uint8 STATUS_RELOCALIZING = 1

@@ -17,12 +17,12 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument(
             "camera_image_topic",
-            default_value="/sensors/camera/color/image_raw",
+            default_value="/camera/camera/color/image_raw",
             description="Source RGB image topic from anubis_sensors",
         ),
         DeclareLaunchArgument(
             "camera_info_topic",
-            default_value="/sensors/camera/color/camera_info",
+            default_value="/camera/camera/color/camera_info",
             description="Source CameraInfo topic from anubis_sensors",
         ),
         DeclareLaunchArgument(
@@ -52,7 +52,7 @@ def generate_launch_description():
         # ---- Live debug view: apriltag_draw ----
         Node(
             package="apriltag_draw",
-            executable="apriltag_draw",
+            executable="apriltag_draw_node",
             name="apriltag_draw",
             output="screen",
             condition=IfCondition(LaunchConfiguration("enable_debug_image")),
