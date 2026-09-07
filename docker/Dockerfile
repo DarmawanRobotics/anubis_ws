@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         xfce4-terminal \
         tigervnc-standalone-server \
         tigervnc-common \
+        autocutsel \
         x11vnc \
         xclip \
         dbus-x11 \
