@@ -20,7 +20,7 @@ find_package(Eigen3 REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common io filters kdtree search)
 find_package(OpenCV REQUIRED)
 find_package(OpenMP REQUIRED)
-find_package(scan_descriptor REQUIRED)
+find_package(anubis_scan_descriptor REQUIRED)
 
 # GTSAM and OpenSSL are not consistently available as a rosdep key across
 # platforms in this workspace's history -- found directly, matching how
@@ -68,7 +68,7 @@ add_library(anubis_mapping_modules
 )
 target_link_libraries(anubis_mapping_modules
   ${PCL_LIBRARIES}
-  scan_descriptor::scan_descriptor
+  anubis_scan_descriptor::anubis_scan_descriptor
   gtsam
   OpenSSL::Crypto
 )
@@ -86,7 +86,7 @@ target_link_libraries(pcd2grid_node
   ${PCL_LIBRARIES}
   ${OpenCV_LIBRARIES}
 )
-ament_target_dependencies(pcd2grid_node rclcpp)
+ament_target_dependencies(pcd2grid_node rclcpp nav_msgs sensor_msgs)
 
 
 # ------------------------------------------------------------------------
@@ -144,7 +144,7 @@ if(BUILD_TESTING)
   ament_add_gtest(test_keyframe_store test/keyframe_store_test.cpp
     src/keyframe_store.cpp)
   target_link_libraries(test_keyframe_store
-    ${PCL_LIBRARIES} scan_descriptor::scan_descriptor)
+    ${PCL_LIBRARIES} anubis_scan_descriptor::anubis_scan_descriptor)
 
   ament_add_gtest(test_map_z_drift_correction
     test/map_z_drift_correction_test.cpp src/map_z_drift_correction.cpp)
@@ -171,7 +171,7 @@ if(BUILD_TESTING)
   ament_add_gtest(test_loop_closure test/loop_closure_test.cpp
     src/loop_closure.cpp src/keyframe_store.cpp)
   target_link_libraries(test_loop_closure
-    ${PCL_LIBRARIES} scan_descriptor::scan_descriptor gtsam)
+    ${PCL_LIBRARIES} anubis_scan_descriptor::anubis_scan_descriptor gtsam)
 
   ament_add_gtest(test_pcd2grid_height test/pcd2grid_height_test.cpp
     src/pcd2grid_ground_plane.cpp)
@@ -179,7 +179,7 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_pcd2grid_free_space test/pcd2grid_free_space_test.cpp
     src/pcd2grid_ground_plane.cpp)
-  target_link_libraries(test_pcd2grid_free_space ${PCL_LIBRARIES})
+  target_link_libraries(test_pcd2grid_free_space ${PCL_LIBRARIES} ${OpenCV_LIBRARIES})
 endif()
 
 ament_export_include_directories(include)
