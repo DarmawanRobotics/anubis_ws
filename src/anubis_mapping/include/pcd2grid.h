@@ -7,7 +7,6 @@
 #include "pcd2grid_ground_plane.h"
 
 #include <rclcpp/rclcpp.hpp>
-#include <nav_msgs/srv/get_map.hpp>
 #include <nav_msgs/msg/occupancy_grid.hpp>
 
 #include <pcl/io/pcd_io.h>
