@@ -1,0 +1,312 @@
+localization:
+  ros__parameters:
+    # basic parameters
+    # [PATCH -- topic names, verify against your anubis_sensors] Matches
+    # the remap set up in anubis_sensors' lidar.launch.py, same as
+    # anubis_mapping's config.yaml.
+    points_topic: "/sensors/lidar/points"
+    imu_topic: "/sensors/lidar/imu"
+    # TF: map→odom = T_map_base * inv(odom→base_link)；dog_sdk 发 odom→base_link
+    # odom_child 必须是 base_link，否则会把完整定位位姿直接当 map→odom 导致与 SDK 叠乘
+    robot_odom_frame_id: "odom"
+    odom_child_frame_id: "base_link"
+    localization_odom_frame_id: "base_link"
+
+    # topic name
+    odom_topic: "/odom/localization_odom"        #"/odom/current_pose"   /odom/localization_odom 
+    aligned_points_topic: "/aligned_points"
+    localization_info_topic: "/localization_info"
+    global_map_points_topic: "/global_map_points"
+    # 可选：启动时直接加载 3D PCD；空字符串保持现有 /load_map_service 手动流程。
+    initial_pcd_map_path: ""
+
+    # IMU parameters
+    use_imu: true
+    invert_acc: false
+    invert_gyro: false
+    # G1 静止 60s 通过前必须为 false；通过后改 true 进入 G2 垂直预测验收。
+    enable_vertical_velocity_prediction: false
+    
+    # IMU initialization parameters
+    imu_init_time: 3.0                    # IMU初始化时间(s)
+    imu_init_queue_size: 600              # IMU初始化队列长度
+    imu_init_max_gyro_var: 0.05          # IMU陀螺仪最大方差阈值
+    imu_init_max_acce_var: 0.5           # IMU加速度计最大方差阈值
+
+    # numeric parameters
+    imu_data_filter_num: 5
+    # When a LiDAR frame has no usable IMU samples (the Livox publisher can be
+    # delayed by >1 s), run the constant-velocity UKF model once before NDT. This
+    # keeps covariance from collapsing while never treating zero as acceleration.
+    imu_stale_fallback_enabled: true
+    imu_stale_fallback_max_dt_s: 0.10
+    # NDT map/input scale pairing (2026-08-19, map.pcd md5=41c586e3513995d63d73412c592ffed6):
+    #   old 0.20/0.30 -> 3.53% valid map cells, 8.65% represented points and
+    #   21 innovation-gate rejections in the DOG_SDK replay.
+    #   tested 0.10/0.30, 0.15/0.40 and 0.20/0.50 on the same 272 s bag.
+    #   The former 0.15/0.40 choice used SDK odom as reference; direct raw-NDT
+    #   comparison with independent scan-to-map ICP shows 0.10/0.30 is better:
+    #   turn translation disagreement 0.036 m versus 0.070 m and 0.127 m.
+    #   It also represents 92.16% of map points in valid NDT cells and kept NDT
+    #   P95 at 50.3 ms, so the extra map density remains within the 10 Hz budget.
+    globalmap_voxel_size: 0.10
+    points_voxel_filter_size: 0.1
+
+    # other parameters
+    send_tf_transforms: true
+    cool_time_duration: 0.5
+
+    # registration method parameters
+    # reg_method: NDT_OMP (neighbor search: DIRECT1, DIRECT7, KDTREE)
+    reg_method: "NDT_OMP"
+    ndt_neighbor_search_method: "DIRECT7"
+    ndt_neighbor_search_radius: 1.0
+    ndt_resolution: 0.3
+
+    # NDT 配准的点云高度上限（米，传感器高度以上）。<=0 关闭。**只影响 NDT**，
+    # GL 的描述子检索仍用未过滤的地图（描述子库是用未过滤地图建的，不能动）。
+    #
+    # 依据（2026-08-17 离线实测，map.pcd md5=92a87a35...）：
+    #   地图中 z>1.5m 的点占 40.3%，沿走廊均匀延伸、几乎不含纵向特征。NDT 是所有
+    #   点一起最小化，这 40% 的无区分度点把有区分度的墙面/近地面特征稀释掉了。
+    #   实测各高度带对"沿 y 平移 0.5m"的平均最近邻残差（越大越不易滑走）：
+    #       近地面 <0.3m  0.0913 m (占 25.1%)
+    #       墙面 0.3~1.5m 0.1212 m (占 34.5%)  ← 区分能力最强
+    #       高处 >1.5m    0.0498 m (占 40.3%)  ← 最差，且主导整体
+    #   截高后整体抗滑动能力（三个实测落位点平均）：
+    #       无上限 0.0491 → 2.0m:0.0714(+45%) → 1.8m:0.0787(+60%)
+    #       → 1.5m:0.0840(+71%) → 1.2m:0.0828(+69%) → 1.0m:0.0823(+68%)
+    #   1.5 是拐点；再往下砍会损失有用的墙面点，收益反而下降。
+    #
+    # ⚠️ 依赖 flat_single_level_map=true（地图与扫描的 z 参考近似对齐）。
+    #
+    # 【2026-08-17 已回退为关闭 (-1)】实测结论与上述离线预测**相反**：
+    #   静止段 deviation_xy 0.69~0.84m → 0.83~0.86m（无改善）
+    #   (>XY) 拒帧 186 → 223，rejection grace 39 → 78
+    #   (>pitch) 拒帧 1 → 97   ← 天花板是本图最主要的水平面（地面点仅 4.5%），
+    #                            砍掉它等于砍掉 pitch/roll/z 的主要观测源
+    # 上面那套离线指标（点云平移后的最近邻残差）是**错误的代理量**：NDT 的代价
+    # 函数是体素内正态分布匹配，与点对点距离没有可靠对应关系。保留记录以免重蹈。
+    ndt_max_point_height: -1.0
+
+    # initial pose parameters
+    specify_init_pose: true
+    init_pos_x: 0.0
+    init_pos_y: 0.0
+    init_pos_z: 0.0
+    init_ori_w: 1.0
+    init_ori_x: 0.0
+    init_ori_y: 0.0
+    init_ori_z: 0.0
+
+    # [PATCH -- different physical robot from the one this repo was
+    # originally tuned on] The previous init_R/init_T below came from a
+    # static-gravity IMU measurement on a DIFFERENT unit with a tilted
+    # LiDAR mount. This robot's LiDAR is mounted level (no rotation) per
+    # the manufacturer URDF (xg_wheel_su), so R_base_lidar = identity.
+    # Coordinate convention unchanged: base_link +X toward the head, +Y
+    # left, +Z up; matrices row-major, p_base = R_base_sensor * p_sensor + t.
+    # [PATCH -- physical mounting position] Updated to match this
+    # robot's actual anubis_description/urdf/sensors.xacro (livox_joint
+    # origin xyz="0.13011 -0.02329 0.17598") -- the previous value
+    # [0.211, 0, 0.145] was darmawan_ws's own corrected-for-a-different-
+    # unit value, not this robot's real mounting position. Must stay
+    # numerically identical to anubis_mapping's config.yaml
+    # keyframe.lidar_to_base_T -- test_extrinsic_config_consistency.py
+    # enforces this (now checked against anubis_description's xacro too,
+    # not a redundant static_transform_publisher -- see that test's
+    # docstring for why the launch file no longer publishes this itself).
+    # init_R is Mid-360's built-in IMU->base fixed rotation. Mid-360's
+    # factory LiDAR->IMU rotation is identity (see mapping's config.yaml
+    # extrinsic_R), so R_base_imu = R_base_lidar = identity here too.
+    init_R: [1.0, 0.0, 0.0,
+             0.0, 1.0, 0.0,
+             0.0, 0.0, 1.0]
+    # init_T is the full LiDAR->base transform used to put the point cloud
+    # into the base frame before NDT/GL.
+    init_T: [1.0, 0.0, 0.0, 0.13011,
+             0.0, 1.0, 0.0, -0.02329,
+             0.0, 0.0, 1.0, 0.17598,
+             0.0, 0.0, 0.0, 1.0]
+
+
+    # map 系下的重力方向（单位向量，"上"为正）。用于锚定 UKF 的 roll/pitch ——
+    # 室内平面地图里 NDT 对这两个自由度没有信息量（倾斜 40° 墙面照样对得上），
+    # 必须由加速度计的重力观测提供绝对参考。
+    #
+    # 原值 [-0.0215, 0.0016, 0.9998] 只属于旧 map.pcd
+    # (md5=92a87a35d62e05ef32832037349f0cbc)，不能沿用到重建地图。
+    # 新地图生成前先使用理想 +Z；保存新 map.pcd 后必须重新拟合地面法向并替换。
+    # ⚠️ 禁止改回"运行时从 NDT 姿态在线学习"：实测落位后不到 1 秒 NDT 就把姿态
+    #    拖偏 10.5°，学到的基准与真实地面法向差 11.67°，且所有漂移门控会自洽失效。
+    map_gravity_direction: [0.0, 0.0, 1.0]
+
+    # initial pose initialization parameters
+    init_match_count_threshold: 2
+    # Round 10: relaxed from 0.15 to 1.0 — only rejects catastrophic frames (score > 1).
+    # Combined with init_match_pose_jump_threshold for pose consistency check.
+    init_match_score_threshold: 1.0
+    # Round 10: max allowed frame-to-frame position jump during init (m).
+    # On a stationary robot, NDT should not jump > 0.3m between consecutive frames.
+    init_match_pose_jump_threshold: 0.3
+    # Round 10: relaxed from 0.5 to 1.0. NDT score at correct position is naturally
+    # 0.6-0.9 in this environment. Mahalanobis gate + pos_norm > 5m guard already
+    # catch genuinely wrong results (score=9840, pos=87m). Keeping this too strict
+    # causes ALL correct NDT corrections to be rejected post-init → UKF drifts.
+    ndt_score_threshold: 1.0
+    # [2026-08-13] R14 扫描运动补偿（去畸变）。一帧 Livox 点云在 ~100ms 内累积，
+    # 行走时机身摇摆使帧内点云畸变（3m 处 10° 摇摆 ≈ 0.5m 误差），是导航中
+    # NDT 失配、innovation gate 连续拒帧的主因之一。用缓冲的 IMU 角速度积分，
+    # Mid-360 实测 header 是帧首，点时间为 [header, header+约100ms]；因此把帧内点
+    # 按采集顺序反推到帧首，保持点云、NDT 和 UKF 使用同一 header 时间基准。
+    # 旋转用 IMU，平移只用 SDK odom 速度。
+    # 帧内 IMU 样本不足时自动跳过补偿，宁可不补、不补错。
+    # [2026-08-18 外参切换保护] 原值 true。实现现已先应用 init_T 把点放到
+    # base_link，再使用同为 base_link 的 IMU 角速度和 SDK 速度，坐标语义已修正。
+    # 旧实现错误取 [header-100ms, header] 并对齐帧尾，已根据逐点时间修正。
+    # 动态 A/B 完成前仍保持关闭；robot_slam/FAST-LIO 的去畸变不受此项影响。
+    motion_compensation_enable: false
+    motion_compensation_slices: 10
+    robot_odom_topic: "/odom"
+    robot_odom_velocity_max_age_s: 0.25
+    enable_robot_odometry_prediction: true
+    # 拒帧后立即 valid=false 并冻结 map→odom；超时后按下方开关选择恢复路径。
+    # [2026-08-31] 2.0s/2帧过激:到点减速的物理晃动消耗宽限后,真正故障来
+    # 临时已在失效边缘(实测 15 次误拒+34 次实拒)。放宽到 5.0s。
+    localization_rejection_timeout_s: 5.0
+    # 宽限期内连续通过指定帧数后才恢复 valid=true。
+    localization_recovery_valid_frames: 3
+    # [2026-08-31] M2b 已验收(auto_confirm 开启,检索落位实测通过),
+    # 跟踪失败超时后允许 GL 自动重检索落位代替人工 /initialpose ——
+    # 门口滑移类故障自愈,不再躺平等人。若需回到人工恢复,置回 false。
+    gl_relocalize_on_tracking_failure: true
+
+    # 诊断只记录证据，不改变 NDT、UKF、去畸变或门控结果。健康帧 1Hz，拒帧立即输出。
+    ndt_optimizer_diagnostics_enabled: true
+    # 每帧输出预测/NDT/UKF 链路和每次牛顿迭代；仅离线复现时显式打开。
+    ndt_detailed_diagnostics_enabled: false
+    sensor_time_diagnostics_enabled: true
+    diagnostics_healthy_interval_ms: 1000
+
+    # Global localization parameters
+    use_global_localization_init: true
+    gl_recall_source: "retrieval"
+    retrieval_fallback_to_grid: true
+    retrieval_topk: 3
+    retrieval_nms_xy: 4.0
+    retrieval_max_distance: 0.40
+    retrieval_min_points: 300
+    retrieval_yaw_half_range_deg: 10.0
+    retrieval_yaw_step_deg: 5.0
+    retrieval_search_radius_xy: 1.5
+    retrieval_seed_stride_xy: 1.5
+    # [2026-08-14] 静止多帧一致性确认（取代运动投票）：检索探针便宜到可以
+    # 原地重复,连续 gl_confirm_frames 次独立探针给出一致位姿才落位。
+    # 几何验证与"次优簇是否在别处且分数接近"的歧义检验仍由 selectBestCluster
+    # 承担 —— 三道闸全过才 Confirmed,机器狗全程无需移动。
+    gl_confirm_frames: 3
+    gl_confirm_xy_tol: 0.30
+    gl_confirm_yaw_tol_deg: 5.0
+    # 探针节流：扫描 10Hz,但一次探针远超 100ms,不节流会打满回调线程。
+    gl_probe_period_s: 0.5
+    # 超时后请求人工 initialpose；场景歧义时把狗挪两米重启即可重新尝试。
+    gl_attempt_timeout_s: 30.0
+    # M2b 已于 2026-08-29 验收通过(实机重建图检索召回 + 占用一致性验证,
+    # 候选锁定 (0.687,-0.114)、would_reject=0),开启 online shadow、
+    # episode 运行时与自动落位/自动确认。
+    gl_online_shadow_enabled: true
+    # Official M2b episode gate.  The legacy gl_auto_init_enabled name is
+    # accepted only as a deprecated startup alias and never ORed with this.
+    gl_episode_runtime_enabled: true
+    auto_confirm_enabled: true
+    # Confirmed 位姿应用后，必须在此时间内通过连续 NDT 验证，否则请求人工初始位姿。
+    auto_confirm_verify_timeout_s: 5.0
+    # [2026-08-12] GL 预算。此前这两项只存在于 launch 的 default_value（1000/10），
+    # config 里缺失；launch 改为 config 优先后必须在此显式给出，否则回落到更紧的
+    # 代码内置默认值，导致召回来不及完成即 per_call_deadline+episode_timeout。
+    # 全栈同跑（导航栈占 CPU）时实测需要 30s/300s 量级才稳。
+    per_call_deadline_ms: 30000.0
+    episode_timeout_s: 300.0
+    level0_gravity_max_age_ms: 100.0
+    # M2b 已验收(2026-08-29),填写真实审批标识。语法要求(isUsableM2bApprovalId):
+    # 以 "m2b:" 开头,冒号分隔 ≥4 个字段,字段仅限 [A-Za-z0-9._-] 且含非零
+    # 字母数字;不得含 todo/test/none 等占位词。重建地图或参数变更后需重跑
+    # M2b 并更新本标识。
+    m2b_approval_id: "m2b:20260829:zsl1:smallroom-rebuild:map0829"
+    # Offline M3a/M2b only. When enabled, both values must be supplied for the
+    # current bag/manifest episode; production keeps this disabled.
+    dump_candidates_csv: false
+    candidates_csv_path: ""
+    candidates_csv_episode_id: ""
+    allow_degraded_fallback: false
+    # 今天(2026-08-29)重建的室内小房间地图为单层平地,置 true 以满足
+    # auto_confirm 契约;更换多层/坡面地图前必须改回 false 并重跑 M2b。
+    flat_single_level_map: true
+    # base_link 原点高于地面的正高度。原值 0.44m；新初值取站立雷达高度
+    # 0.47~0.49m 的中值减 t_base_lidar.z=0.085m，得到 0.395m。
+    # 该值仍受人工测量和站姿高度波动影响，重建地图时需用静态地面平面复核。
+    level0_base_ground_offset: 0.395
+    # M3a calibrated candidate: retain useful geometry in near-wall/doorway scenes.
+    level0_min_range: 0.5
+    # P1 corrected-GT regression: 3.0 showed no recall gain; baseline 4.0 restored.
+    level0_region_nms_xy: 4.0
+    # P2 single-variable experiment: the current Level 0 center is about 3.18 m
+    # from the independently measured GT. With a 1.5 m stride, 3.0 m is the
+    # minimum radius that adds the required (-3.0, 0) translation template.
+    level1_search_radius_xy: 3.0
+    level1_seed_stride_xy: 1.5
+    # M3b single-variable experiment: minimum budget that admits a GT-matching
+    # seed in the recorded Level 1 ordering (baseline/code default: 12).
+    max_refine_candidates: 12
+    # Ambiguity semantics (2026-08-11 fix): clusters ranked quality-first
+    # (best_score), support_group_count is a confirmation gate only. Two
+    # clusters whose medoids are > ambiguous_pose_distance apart with score
+    # ratio < ambiguous_score_ratio => Ambiguous (materially different
+    # conclusions, scores too close to disambiguate). The measured
+    # repeated-view pair (distance 1.655 m, ratio 3.691) is intentionally NOT
+    # ambiguous: the score gap is decisive and the pair is same-site range;
+    # the temporal vote remains the guard for a wrong dominant score.
+    ambiguous_pose_distance: 2.0
+    ambiguous_score_ratio: 1.15
+    # Livox IMU 姿态和协方差不可用时，用连续低动态 raw IMU 估计当前水平面。
+    # 加速度和角速度会先经 init_R 从 IMU 转到 base_link，再进入此滤波器；
+    # 因此雷达固定约 17.3deg 安装倾角不会被误当成机器狗自身倾斜。
+    level0_raw_imu_gravity_filter_enabled: true
+    level0_raw_imu_gravity_window_s: 0.30
+    # [2026-08-14 实测] 0.05 过紧：狗站立时身体自然摇摆(~0.3Hz)的峰值角速度
+    # 会周期性超过它 → 重力窗口不断被打断 → 探针以约 3 秒周期交替
+    # 成功/GravityUnavailable。放宽到 0.12(6.9°/s)：真实运动(行走/转身
+    # ~28°/s=0.5rad/s)远在其上，不会混淆；摇摆不再打断重力估计。
+    level0_raw_imu_gravity_max_angular_velocity_rps: 0.12
+    level0_raw_imu_gravity_min_samples: 30
+    init_pose_change_threshold: 0.01      
+    init_quat_change_threshold: 0.01      
+    global_localization_timeout: 10.0     
+
+    # --- AprilTag anchor correction ---
+    apriltag:
+      # [PATCH -- ArUco -> AprilTag migration] See mapping's config.yaml
+      # equivalent comment. apriltag_ros carries no pose in its detection
+      # message (only pixel corners/homography); the pose comes from a
+      # TF lookup (base_link -> "tag<family>:<id>") composed by tf2
+      # across anubis_description's chain, so there is no
+      # base_to_camera_T extrinsic parameter here anymore -- nothing
+      # left to keep in sync with the URDF by hand.
+      enable: true
+      detection_topic: "/perception/apriltag/detections"
+      # hamming = corrected bit count (0 is best); decision_margin =
+      # detector confidence (higher is better). Replaces the old
+      # max_reprojection_error_px/require_depth_validation gate, which
+      # depended on ArUco's own PnP pose estimate.
+      max_hamming: 0
+      min_decision_margin: 50.0
+      tag_family: "36h11"
+      base_frame_id: "base_link"
+      # Correction within this distance of the current estimate applies
+      # immediately (ordinary drift correction); larger discrepancies need
+      # consistency_min_hits agreeing detections within
+      # consistency_window_s before being trusted (same spirit as GL's
+      # false-lock disambiguation).
+      max_jump_m: 0.5
+      consistency_min_hits: 3
+      consistency_window_s: 2.0

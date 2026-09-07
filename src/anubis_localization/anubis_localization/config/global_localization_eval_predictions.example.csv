@@ -1,0 +1,6 @@
+episode_id,stage,rank,region,x,y,yaw_deg,status
+fixture_room_a_001,seed,1,room_a,0.1,0.0,1.0,
+fixture_room_a_001,coarse,1,room_a,0.1,0.0,1.0,
+fixture_room_a_001,cluster,1,room_a,0.1,0.0,1.0,
+fixture_room_a_001,decision,1,room_a,0.1,0.0,1.0,Confirmed
+region_only_diagnostic_001,seed,1,room_b,10.0,2.0,90.0,

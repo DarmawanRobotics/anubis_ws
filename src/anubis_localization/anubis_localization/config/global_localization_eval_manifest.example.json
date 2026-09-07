@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "map_version": "replace-with-map-hash",
+  "coordinate_frame": "map",
+  "T_map_gt": [
+    1.0, 0.0, 0.0, 0.0,
+    0.0, 1.0, 0.0, 0.0,
+    0.0, 0.0, 1.0, 0.0,
+    0.0, 0.0, 0.0, 1.0
+  ],
+  "time_sync": {
+    "method": "replace-with-calibration-method",
+    "residual_p99_ms": 0.0
+  },
+  "regions": [
+    {
+      "name": "room_a",
+      "polygon": [[-5.0, -5.0], [5.0, -5.0], [5.0, 5.0], [-5.0, 5.0]]
+    },
+    {
+      "name": "room_b",
+      "polygon": [[5.1, -5.0], [15.0, -5.0], [15.0, 5.0], [5.1, 5.0]]
+    }
+  ],
+  "episodes": [
+    {
+      "episode_id": "fixture_room_a_001",
+      "bag_path": "bags/fixture_room_a_001",
+      "scene": "room_a_start",
+      "region": "room_a",
+      "pose_kind": "full_pose",
+      "pose": {"x": 0.0, "y": 0.0, "yaw_deg": 0.0},
+      "uncertainty": {"xy_m": 0.05, "yaw_deg": 1.0},
+      "gt_source": {
+        "type": "calibrated_fixture",
+        "record_id": "replace-with-calibration-record",
+        "independent_from_localization": true
+      },
+      "annotator": "replace-with-name",
+      "reviewer": "replace-with-name",
+      "unusable_intervals": []
+    },
+    {
+      "episode_id": "region_only_diagnostic_001",
+      "bag_path": "bags/region_only_diagnostic_001",
+      "scene": "repeated_view",
+      "region": "room_b",
+      "pose_kind": "region_only",
+      "gt_source": {
+        "type": "human_region_label",
+        "record_id": "replace-with-label-record",
+        "independent_from_localization": false
+      },
+      "annotator": "replace-with-name",
+      "reviewer": "replace-with-name",
+      "unusable_intervals": []
+    }
+  ]
+}
