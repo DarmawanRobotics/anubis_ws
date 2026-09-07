@@ -1,0 +1,14 @@
+apriltag:
+  apriltag:
+    ros__parameters:
+      image_transport: "raw"
+      family: "36h11"
+      # Set the actual physical side length of the tag in METERS (excluding the outer white border).
+      # Placeholder: 0.10 = 10 cm. The pose scale will be incorrect if this does not match the physical tag size.
+      size: 0.10
+      # z_up=true rotates the tag frame so that the Z-axis points upward.
+      # Useful when the tag is mounted on a vertical surface and you want Z to remain aligned with the world "up" direction.
+      # Default upstream: false. Adjust if the frame orientation appears inverted in RViz.
+      z_up: false
+      max_hamming: 0
+      decimate: 1.0
