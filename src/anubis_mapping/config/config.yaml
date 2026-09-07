@@ -1,0 +1,394 @@
+laser_mapping:
+  ros__parameters:
+    # 空字符串时使用编译时项目 map 目录；可由 launch 的 map_output_dir 覆盖。
+    map_output_dir: ""
+    feature_extract_enable: true
+    # [2026-08-12] 边缘特征参与定位约束。依赖 feature_extract_enable=true
+    # （几何分类写在 PointType::normal_x）。边缘点无稳定局部平面，因此单独
+    # 体素降采样（避免 VoxelGrid 把标签平均掉）、用更严的接受阈值、并对
+    # 残差降权后再进 IESKF。
+    # false=基线（不用边缘约束）；true=边缘参与残差。两轮跑同一路线做对比。
+    edge_constraint_enable: true
+    filter_size_edge: 0.1
+    edge_residual_weight: 0.5
+    point_filter_num: 2
+    max_iteration: 3
+    filter_size_surf: 0.2
+    filter_size_map: 0.2
+    cube_side_length: 1000.0
+    common:
+        # [PATCH -- topic names, verify against your anubis_sensors] These
+        # match the remap set up in anubis_sensors' lidar.launch.py
+        # (livox_ros_driver2's /livox/lidar -> /sensors/lidar/points,
+        # /livox/imu -> /sensors/lidar/imu). If you've changed that remap,
+        # update these two lines to match.
+        lid_topic:  "/front_lidar"
+        imu_topic:  "/front_lidar/imu"
+        time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
+        time_offset_lidar_to_imu: 0.0 # Time offset between lidar and IMU calibrated by other algorithms, e.g. LI-Init (can be found in README).
+    preprocess:
+        lidar_type: 1                # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR, 
+        scan_line: 4      #
+        blind: 0.5      # Blind area of Livox LiDAR, unit: m
+        timestamp_unit: 3
+        scan_rate: 10
+    mapping:
+        acc_cov: 0.1
+        gyr_cov: 0.1
+        b_acc_cov: 0.0001
+        b_gyr_cov: 0.0001
+        # 建图启动时用于估计重力和陀螺零偏的静止窗口。原实现按 20 个
+        # IMU 样本结束（约 0.1 s），容易把启动振动带入姿态；现在按时间
+        # 窗口完成，样本数仅作为极端情况下的上限保护。
+        imu_init_duration_s: 3.0
+        # 只有连续一个完整窗口满足静止条件才完成初始化；机器狗仍在起身、
+        # 维稳或行走时会打印 [IMU INIT RETRY] 并重新累计，避免把运动当成
+        # 重力方向和陀螺零偏。历史稳定窗口最大约 0.018/0.019，异常窗口为
+        # 0.224/0.176，因此 0.05 保留了足够的实机抖动余量。
+        imu_init_max_acc_std_g: 0.05
+        imu_init_max_gyr_std_rad_s: 0.05
+        imu_init_max_mean_gyr_rad_s: 0.05
+        # Relative norm error of a stationary accelerometer window (g).
+        # The Livox stream reports acceleration in g during initialization.
+        imu_init_max_acc_norm_error_g: 0.05
+        # Optional startup bias corrections.  init_ba is expressed in raw
+        # accelerometer g and is converted to m/s^2 for the filter state;
+        # init_bg is an additive gyro correction in rad/s and is not
+        # gravity-scaled.
+        init_ba: [0.0, 0.0, 0.0]
+        init_bg: [0.0, 0.0, 0.0]
+        # RPY in radians; optional map-frame gravity correction from a
+        # previously validated map_leveling.yaml.
+        init_gravity_correction_rpy: [0.0, 0.0, 0.0]
+        fov_degree:    360.0
+        det_range:     100.0
+        extrinsic_est_en:  false      # true: enable the online estimation of IMU-LiDAR extrinsic
+        # Mid-360 机内 LiDAR→IMU 厂家外参，不是 base_link 安装外参。
+        # 原值即当前值；雷达重新安装不会改变机内装配，禁止填入 [0.220,0,0.085]。
+        extrinsic_T: [ -0.011, -0.02329, 0.04412 ]
+        extrinsic_R: [ 1., 0., 0.,
+                    0., 1., 0.,
+                    0., 0., 1.]
+    diagnostics:
+        # [2026-08-26] FAST-LIO Z 根因定位日志。只读取并输出现有状态，
+        # 不改变 IMU 预测、去畸变、匹配、IESKF 更新或地图插入行为。
+        # 通过点云时间戳 t 串联 [LIO INPUT]；其余每帧使用同一个 frame/t，
+        # 可串联 [LIO SYNC/IMU/PRED/DESKEW/UPDATE/MATCH/WORLD]。
+        lio_trace_enabled: true
+        lio_trace_every_n_scans: 1
+    publish:
+        path_en: true                # true: publish Path
+        map_en: true                  # true: publish Map cloud
+        world_points_en:  true       # false: close all the point cloud output
+        body_points_en: true  # true: output the point cloud scans in IMU-body-frame
+    pcd2pgm:
+      file_name : "map"
+      # 以下三个 z 值均为相对 keyframe.floor_z_map 的离地高度，不是 map.z
+      # 绝对值。原实现直接按绝对 map.z 使用会造成等于地面基准绝对值的高度
+      # 偏差。原下限 -0.20m 会把地面点计入栅格；2026-08-26 最新地图在
+      # 自适应地面回退固定 z 后仍有大量 0.05~0.10m 低矮地面点漏入障碍带，
+      # 因此由 0.05m 提高到 0.10m。只影响新生成的 PGM，不修改 PCD。
+      # [2026-09-01] 0.10→0.15：残余 Z 漂移(修正被斜率门拦截时)使地面/墙脚
+      # 点落在 0.10~0.13m 擦边带，305 个孤立散点格 min_height 中位 0.12；
+      # 抬高门限消化擦边带，低于 0.15m 的低矮障碍物按设计被忽略。
+      thre_z_min : 0.15
+      # [2026-08-14] 配合 overhead_clearance_z 的最低点判定，z 上限放宽到 3.0：
+      # 让门楣/横梁的点完整进入，靠"最低点高度"区分悬空结构与实心墙，
+      # 而不是靠切掉高处点（切不干净且各房间门楣高度不同 1.95~2.45m）。
+      thre_z_max : 3.00
+      # 栅格里最低点离地高于此值 → 判为悬空结构(门楣/桌面)，下方可通行。
+      # [2026-08-20] 原值 1.2m 会把门口上方 0.75~1.15m 的结构投影为墙。
+      # [2026-08-21] 原值 0.60m；当前门洞边缘最低点约 0.593m，仍会把门楣
+      # 边缘投影为障碍。机器狗含雷达最高约 0.49m，取 0.55m 保留约 0.06m
+      # 垂直余量。该值是悬空结构净高阈值，不是机器狗 footprint 高度。
+      overhead_clearance_z : 0.55
+      # [2026-08-29/30 门口混合格修复 总开关]
+      # true = 启用低点计数/占比/帧数判定；有关键帧扫描时还要求地面射线
+      # 从格子后方穿过，防止清墙后射线穿墙；false = 完全恢复旧的
+      # "格内最低点 <= 0.55 即占用"判定。
+      # 修改后需重启建图节点生效。
+      low_point_gate_enabled : true
+      # [2026-08-29/30 门口混合格修复] 悬空判定的低点计数门限:格内低于
+      # overhead_clearance_z 的点数 >= min_low_points_occupied 才判真实
+      # 矮障碍(细东西可能只有 1~2 个占用点,此门限保持 2 不上调);零星
+      # 低点(如 10~13cm 门槛条回波混进 2.4m 过梁格)不再劫持整格。
+      min_low_points_occupied : 2
+      # 低点占比门限:低点数/格内障碍点数 >= 此值(与计数门限同时满足)
+      # 才判真实矮障碍。
+      overhead_min_low_ratio : 0.25
+      # [2026-08-30] 零星低点的持续性门槛:低点在超过该帧数的不同关键帧
+      # 中同一格持续出现才判阻挡(可能是墙脚/门框);实测门口门轨 5~10 帧
+      # 被正确放行,墙柱低点 37 帧被保守保留。
+      overhead_low_frame_persistence : 10
+      # 混合格只有在地面射线从格子后方穿过至少 2 个关键帧、且穿越帧数
+      # 达到该格障碍观测帧数的 10% 后才清除；避免清墙后射线穿墙。
+      overhead_min_ray_crossing_frames : 2
+      overhead_min_ray_crossing_ratio : 0.10
+      # 2D 栅格图按关键帧轨迹外扩这么多米裁剪（<=0 关闭）
+      grid_crop_margin : 3.0
+      flag_pass_through : 0
+      # Saved PCD voxel leaf.  The PGM uses the dense map source below; this
+      # value is recorded in map_leveling.yaml so the two quantization paths
+      # remain auditable and reproducible.
+      save_voxel : 0.10
+      # [2026-08-21] 原值 0.10m；5cm 栅格降低门框两侧的量化损失，并与
+      # local/global costmap 的 0.05m 分辨率一致。只影响新保存的 PGM/YAML。
+      map_resolution : 0.05
+      thre_radius : 0.15
+      # Occupancy evidence (separate from the 3-D radius-filter neighbor count)
+      min_points_occupied : 2
+      min_obstacle_frames : 2
+      min_free_frames : 2
+      free_to_obstacle_frame_ratio : 2.0
+      # [2026-08-14] 5 太严：3D 半径滤波(0.15m 球内需 5 邻居)把 98.5% 的墙点
+      # 删光（点云 62k 点散布在大体积，每球期望仅 2 邻居；狗的步态颠簸让
+      # 同墙点 z 散布，雪上加霜）。降到 2 只删真正孤立的杂点。
+      thres_point_count : 2
+      # [2026-08-19] 地面点不能参与障碍计数，但它能证明该 10cm 栅格已被观测
+      # 且可通行。旧实现先删地面，再把无剩余点的格子保留为 UNKNOWN，导致房间
+      # 和门口出现大量灰色孤立孔洞。障碍证据始终优先，不会被地面清空。
+      ground_free_enabled : true
+      # 相对 floor_z_map 的地面证据下限；上限复用 thre_z_min=0.15m。
+      ground_free_min_height : -0.15
+      # 使用逐关键帧的雷达原点到地面回波做 2D 射线清空；射线遇到已确认障碍
+      # 立即停止，避免穿墙清空。离线只有聚合 PCD 时自动退化为仅使用地面证据。
+      raytrace_free_enabled : true
+      raytrace_max_range : 10.0
+      # 仅用于保存日志：若占用格内所有障碍点都低于此离地高度，列为疑似地面
+      # 漏点/墙脚/门槛，便于后续按坐标检查，不直接改变分类。
+      low_obstacle_diagnostic_height : 0.25
+      # [2026-08-26] 保存 PGM 时输出 map_cell_evidence.csv，逐格记录高度
+      # 分位数、障碍/地面/射线关键帧数和最终分类。仅增加诊断，不改变地图。
+      cell_evidence_diagnostics_enabled : true
+      # [2026-08-20] PGM 高度分类使用鲁棒地面平面 z=ax+by+c。0820 实测 PCD
+      # 沿 8m 走廊抬高约 0.105m，固定 floor_z_map 会把远端地面当障碍；0819
+      # 地面沿同方向仅变化约 0m。该模型只影响 PGM，不修改 PCD、关键帧位姿或
+      # GL 描述子使用的固定 floor_z_map。质量门控失败时自动回退固定高度。
+      ground_plane_enabled : true
+      # 地面拟合失败时是否拒绝 PGM/地图保存。该开关独立于
+      # map_leveling.enforce_quality_gates：当前按跨楼层建图需求显式关闭，
+      # 允许记录原因并使用固定 floor_z_map 保存；单层正式图验收时可显式设为 true。
+      ground_plane_required : false
+      ground_plane_candidate_min_height : -0.15
+      ground_plane_candidate_max_height : 0.30
+      ground_plane_min_sample_cells : 100
+      ground_plane_min_inlier_ratio : 0.60
+      ground_plane_max_tilt_deg : 3.0
+      ground_plane_max_residual_p95 : 0.08
+      # 保存阶段的刚体重力整平会先消除累计倾斜；这里仅保留地面模型
+      # 相对配置基准的绝对偏差安全门。历史 0826 大图曾需要 0.35m 的
+      # 首轮拟合窗口，但整平后的正式地图按 0.25m 拒绝异常基准。
+      ground_plane_max_floor_offset : 0.25
+      # 平面和缓慢变化的二次地面曲面始终作为独立候选评估；在各自质量门
+      # 通过的候选中选择残差 P95 更小者。二次曲面用于兼容真实局部高差和
+      # 地图中的连续 Z 弯曲；局部坡度、曲率、残差、覆盖率和相对固定地面
+      # 偏差任一超限，仍回退 floor_z_map。
+      ground_plane_quadratic_enabled : true
+      ground_plane_quadratic_max_local_tilt_deg : 3.5
+      ground_plane_quadratic_max_curvature : 0.02
+    lio:
+      # [2026-08-28] 传感器时间连续性守卫:实测 bag 曾出现 IMU 200Hz 掉到
+      # 51Hz、雷达 0.4s 断档,跨洞积分直接导致轨迹发散(Z 漂到 -300m)。
+      # 超限即终止本次会话并拒绝保存,不静默 clamp；必须重启节点。
+      time_guard:
+        enabled: true
+        # 除了大间隔，还会拒绝 NaN、逆序和非正 IMU 时间戳；阈值非法时
+        # 节点启动即失败，避免把时间域异常静默带入 FAST-LIO 积分。
+        max_scan_gap: 0.25   # 正常 0.1s(10Hz);超限立即终止会话
+        max_imu_dt: 0.10     # 正常 5ms(200Hz);帧内/跨帧超限立即终止会话
+        # 相邻 Mid-360 点时间窗允许的有界重叠；历史实测最大约 0.44ms。
+        # 超过该值仍按 lidar_out_of_order fail-closed。
+        max_scan_overlap: 0.002
+    keyframe:
+      # [2026-08-14] 描述子库是建图产物：必须开启，定位检索才可用。
+      enable: true
+      # [PATCH -- physical mounting position] Updated to match this
+      # robot's actual anubis_description/urdf/sensors.xacro
+      # (livox_joint origin xyz="0.13011 -0.02329 0.17598") -- the
+      # previous value [0.211, 0, 0.145] was darmawan_ws's own
+      # corrected-for-a-different-unit value, not this robot's real
+      # mounting position. Must stay numerically identical to
+      # anubis_localization's equivalent config once that package exists
+      # -- or, better, both should eventually read this from a live TF
+      # lookup against anubis_description instead of a duplicated
+      # constant (see mapping_alg.cpp's AprilTag TF-lookup comment for
+      # why that direction is worth pursuing here too).
+      lidar_to_base_T: [1.0, 0.0, 0.0, 0.13011,
+                        0.0, 1.0, 0.0, -0.02329,
+                        0.0, 0.0, 1.0, 0.17598,
+                        0.0, 0.0, 0.0, 1.0]
+      trans_threshold: 0.5
+      yaw_threshold_deg: 10.0
+      store_leaf: 0.1
+      # Dense save-time ground/ray evidence is kept separately from the
+      # descriptor cloud.  It must be no coarser than half the PGM lattice.
+      ground_store_leaf: 0.025
+      # 新建 map 坐标中的楼层基准 z。GL 描述子直接使用；PCD→PGM 把它作为
+      # 地面平面拟合的候选中心和失败回退值。导出描述子时用
+      # floor_z_map - T_map_base.z 换算为 base 局部地面高度；内部回环描述子
+      # 仍保持 LiDAR frame，与 LiDAR-frame ICP/位姿图一致。
+      # 原值 -0.435m 来自人工尺寸推算。2026-08-19 第一张新图的 PCD 地面拟合
+      # 为 z=-0.0050*x+0.0002*y-0.3040（倾斜约 0.29deg），说明旧值低约
+      # 0.131m；旧值会使实际地面落入离地 0.05m 以上的障碍带。现改为实测
+      # -0.304m。PGM 和 map_scd.bin 都在保存时消费该值，修改后必须重新建图。
+      floor_z_map: -0.304
+      max_count: 5000
+      descriptor:
+        ring_count: 20
+        sector_count: 60
+        max_range: 10.0
+        min_range: 0.3
+        z_min: -0.2
+        z_max: 2.0
+    loop:
+      # [2026-08-14] 回环检测 + 位姿图优化，保存地图时一次性生效。
+      enable: true
+      min_keyframe_gap: 60
+      # [2026-08-14 实测] 12 过大：子图 ±12 帧拼接后体素 0.3 仍有约 5 万点，
+      # 一次 ICP 验证要数秒；狗来回走时几乎每帧都触发验证，回环线程积压
+      # 导致保存时 60s 超时。减半后子图约 2.5 万点，速度约翻倍。
+      submap_half_window: 6
+      # 查询多个描述子候选；按距离顺序跳过不满足原始里程计 2m 安全门的候选，
+      # 再把首个安全候选交给连续命中、ICP、创新量和整图 sanity gate。
+      # 这避免 top-1 落在重复墙面时直接丢弃整帧，同时不放宽任何几何门限。
+      descriptor_candidate_count: 5
+      # [2026-08-27 坏图复盘] 原值均为 0.35，室内重复墙面会让错误候选也通过。
+      # 先收紧候选和 ICP；数值越小越严格。
+      descriptor_max_distance: 0.30
+      icp_fitness_threshold: 0.15
+      icp_max_correspondence_distance: 2.0
+      # [2026-08-14 实测] 80 次迭代过慢：描述子偏航修正后的初值已经很准，
+      # 实测 25 次内已收敛（fitness 1e-3 量级）。降到 25 大幅提速。
+      icp_max_iterations: 25
+      # 只验证原始 FAST-LIO 轨迹中已经回到附近的候选。最新坏图中多数误匹配
+      # 的候选相距 4--11m；旧坏图末尾可信返程候选约 1.7--1.84m。2026-08-29
+      # 实测单圈 58m 路径闭合误差 2.47m,2m 门把唯一能修它的候选挡在 ICP 外。
+      # 现由 icp_fitness_threshold=0.15、consistency_min_hits=3 与单条
+      # max_constraint_* 创新量门把关,门放宽到 3.5m 覆盖实测误差并挡住 >4m 误匹配。
+      max_odom_xy_distance: 3.5
+      # 描述子候选需在连续关键帧中重复指向同一片区域，单次偶然匹配不入图。
+      consistency_min_hits: 3
+      consistency_max_keyframe_gap: 3
+      consistency_candidate_xy_tolerance: 1.0
+      # ICP 约束相对原始里程计的单条创新量门限。
+      # 0826 完整 bag 的可信回环实测最大为 XY=0.056m、Z=0.082m、yaw=0.51deg；
+      # 以下门限保留约 2--9 倍余量，但不再允许米级单约束进入位姿图。
+      max_constraint_xy_correction: 0.50
+      max_constraint_z_correction: 0.45
+      max_constraint_yaw_correction_deg: 5.0
+      # 即使单条约束均通过，整图优化也不得把任何关键帧拉离原始轨迹过远。
+      # 这是保存坏图前的最后兜底，触发时整次优化回退原始 FAST-LIO 位姿。
+      # 同一 bag 最终优化实测最大为 XY=0.142m、Z=0.124m、RP=0.963deg、
+      # yaw=1.556deg；以下上限保留余量，并确保 2026-08-27 坏图中约 1.9m
+      # XY、0.25m Z、25deg yaw 的整体拉动必定整图回退。
+      # [2026-08-31] 长路线回环 Z 修正实测随路径长度线性增长:
+      # 58m→0.45m、97m→0.45、107m→0.72、122m→1.20(0.45/0.70/1.20 三代
+      # 门限先后差毫米级拒整图)。Z 修正的残余由保存时地图整平兜底
+      # (实测整平后地面跨度 0.88cm),因此 Z 不再作为保存拦截项,
+      # 设哨兵值 100;真正危险的整图拉动由 XY(0.50)/RP(7°)/yaw(5°)把守。
+      max_optimized_xy_deviation: 0.50
+      max_optimized_z_deviation: 100.0
+      max_optimized_roll_pitch_deviation_deg: 7.0
+      max_optimized_yaw_deviation_deg: 5.0
+      sanity_path_reference_length_m: 10.0
+      sanity_path_scale_max: 4.0
+      odom_roll_pitch_sigma: 0.01
+      odom_z_sigma: 0.05
+      odom_rotation_sigma: 0.02
+      odom_translation_sigma: 0.05
+      loop_roll_pitch_sigma: 0.05
+      loop_z_sigma: 0.10
+      loop_rotation_sigma: 0.05
+      loop_translation_sigma: 0.10
+      huber_k: 1.345
+    apriltag:
+      # [PATCH -- ArUco -> AprilTag migration] Detection (apriltag_ros,
+      # wrapped by anubis_perception) runs in a separate node; this only
+      # turns on the subscriber that tags detections to keyframes and
+      # resolves them at save time against the loop-closure-corrected
+      # poses -- same role as the old aruco: block. The pose itself is no
+      # longer read from this message at all (apriltag_msgs carries no
+      # 3D pose, only pixel corners/homography): it comes from a TF
+      # lookup, "livox_frame" -> "tag<tag_family>:<id>", composed by tf2
+      # across anubis_description's static chain + the camera driver's
+      # own runtime optical-frame publish. There is therefore no
+      # lidar_to_camera_T here anymore -- see mapping_alg.h's
+      # AprilTagObservation comment for the full reasoning.
+      enable: true
+      detection_topic: "/perception/apriltag/detections"
+      # Reject a detection if the nearest keyframe (by timestamp) is
+      # farther than this in time -- avoids attaching a marker sighting
+      # to an unrelated part of the trajectory.
+      max_keyframe_time_gap_s: 1.0
+      min_observations: 3
+      max_position_deviation_m: 0.05
+      # hamming = corrected bit count (0 is best); decision_margin =
+      # detector confidence (higher is better). Replaces the old
+      # require_depth_validation/max_reprojection_error_px gate, which
+      # depended on ArUco's own PnP pose estimate -- apriltag_ros has no
+      # equivalent per-detection residual to gate on.
+      max_hamming: 0
+      min_decision_margin: 50.0
+      tag_family: "36h11"
+      lidar_frame_id: "livox_frame"
+      publish_debug_tf: true
+    map_leveling:
+      enabled: true
+      # 保存时单层几何质量门(整平/竖向修正/固定地面跨度)只做诊断,不拦截保存:
+      # 门失败时记录 WARN/ERROR 并按未修正几何保存,sidecar 记录
+      # leveling_applied=false 与 failure_reason。跨楼层建图无法通过
+      # 单层地面门,默认不拦截;true 恢复这些几何门的 fail-closed。
+      # 回环/最终合成位姿安全门始终 fail-closed，与此开关无关。
+      enforce_quality_gates: false
+      max_correction_deg: 8.0
+      min_inlier_ratio: 0.60
+      # Use the lower observed envelope for save-time ground candidates;
+      # inlier/residual/tilt gates steer correction acceptance and diagnostics
+      # (they block the save only when enforce_quality_gates is true; the
+      # separate loop/final-pose safety gate always blocks invalid poses).
+      sample_quantile: 0.05
+      fallback_sample_quantile: 0.10
+      converged_tilt_deg: 0.05
+      max_iterations: 8
+      max_final_floor_span_m: 0.05
+      z_correction:
+        # 保存时按关键帧地面观测估计并平滑 FAST-LIO 的非刚性 Z 漂移。
+        # 只修正每帧 map-Z，XY/RP/yaw 和所有既有回环安全门保持不变。
+        enabled: true
+        local_candidate_min_height: -0.65
+        local_candidate_max_height: 0.65
+        local_min_sample_cells: 15
+        # 质量判据 = 覆盖 + 独立源 + 内点率(fit 内 0.45,拦双峰/楼梯)
+        # + 偏移(±0.65)。倾角/残差不再是质量门,只作病态几何哨兵:
+        # 0901 实测被拒窗口 tilt 4~17°、p95 0.22~0.41 正是 Z 漂移本身
+        # (其内点率反而高达 98.5%,因内点带是 3×MAD 自适应、越乱越宽,
+        # 故内点率不能当绝对质量门)。30°/0.60 放行真实漂移、只拦墙面级
+        # 拟合。倾角仍通过拟合平面参与修正量计算(floor_z 在关键帧处取值)。
+        local_max_tilt_deg: 30.0
+        local_max_residual_p95: 0.60
+        local_min_range: 0.5
+        local_max_range: 8.0
+        # Limit temporal-neighbor aggregation by actual XY distance and
+        # require independent source support; this prevents cross-room
+        # mixing when the index window is widened for sparse scans.
+        local_max_source_distance: 2.5
+        local_min_independent_sources: 2
+        local_min_source_sample_cells: 3
+        # Four-line Mid-360 keyframes can be locally sparse.  On a failed
+        # single-frame fit, merge at most this many neighboring keyframes
+        # within the same range annulus; all quality gates stay unchanged.
+        local_keyframe_window: 6
+        min_valid_fraction: 0.80
+        max_unobserved_gap_m: 2.0
+        # 0.12→0.10：路口段擦边外点(如 1427 图帧 56-60)勉强存活会迫使
+        # 修正场在半米内陡跳超过斜率门；收紧让中值滤波把它们剔除。
+        outlier_threshold_m: 0.10
+        outlier_window: 3
+        smoothness: 0.03
+        # 求解器幅度门按 0901 实测放宽(0829 干净图标定的 0.45/0.25/0.04
+        # 会连锁硬失败)。[2026-09-01 14:27 图] 斜率门 1.0 仍被拦:修正场
+        # 实测相邻斜率最大 2.40/m(帧 58,路口),上限提高到 2.0;绝对
+        # 幅度门 0.70 与修正后跨度门 0.30 继续兜底。
+        max_abs_correction_m: 0.70
+        max_correction_slope: 2.0
+        max_corrected_floor_span_m: 0.30

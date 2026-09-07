@@ -7,6 +7,36 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
+# [PATCH -- fixes a real build error] darmawan_ws's CMakeLists.txt defined
+# ROOT_DIR as a compile-time fallback for the default map output directory
+# (mapping_alg.h's root_dir_ member, used only when map_output_dir isn't
+# passed at launch -- which it always is in normal use; see the bringup
+# docs). Carried over here since mapping_alg.h references it
+# unconditionally in a member initializer. Renamed from the original's
+# ~/.jszr (a leftover from darmawan_ws's originating company name) to
+# ~/.anubis_maps -- purely cosmetic, zero functional difference, since
+# this default is always overridden at launch in practice.
+add_definitions(-DROOT_DIR="$ENV{HOME}/.anubis_maps")
+
+# [Optional -- performance parity with darmawan_ws, not required to
+# compile] MP_EN/MP_PROC_NUM control FAST-LIO2's OpenMP thread count
+# (mapping_alg.cpp's #ifdef MP_EN guard). Without this, OpenMP just uses
+# its own default thread count instead -- not a compile blocker, but
+# carried over for parity since it costs nothing to set explicitly.
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86)|(X86)|(amd64)|(AMD64)")
+  include(ProcessorCount)
+  ProcessorCount(N)
+  if(N GREATER 4)
+    add_definitions(-DMP_EN -DMP_PROC_NUM=3)
+  elseif(N GREATER 3)
+    add_definitions(-DMP_EN -DMP_PROC_NUM=2)
+  else()
+    add_definitions(-DMP_PROC_NUM=1)
+  endif()
+else()
+  add_definitions(-DMP_PROC_NUM=1)
+endif()
+
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -133,12 +163,17 @@ ament_target_dependencies(pcd2grid_node ${ANUBIS_MAPPING_ROS_DEPS})
 # available there) -- a real `colcon build` is this file's first
 # actual compile. See README.md.
 # ------------------------------------------------------------------------
-add_executable(mapping_alg_node src/mapping_alg.cpp src/mapping_node_main.cpp)
+add_executable(mapping_alg_node
+  src/mapping_alg.cpp
+  src/mapping_node_main.cpp
+  src/pcd2grid.cpp
+)
 target_include_directories(mapping_alg_node PRIVATE include)
 target_link_libraries(mapping_alg_node
   anubis_mapping_lio_core
   anubis_mapping_modules
   ${PCL_LIBRARIES}
+  ${OpenCV_LIBRARIES}
   OpenMP::OpenMP_CXX
 )
 ament_target_dependencies(mapping_alg_node ${ANUBIS_MAPPING_ROS_DEPS})
@@ -150,6 +185,9 @@ install(TARGETS anubis_mapping_lio_core anubis_mapping_modules pcd2grid_node map
 )
 install(DIRECTORY include/
   DESTINATION include
+)
+install(DIRECTORY config launch rviz
+  DESTINATION share/${PROJECT_NAME}
 )
 
 # ------------------------------------------------------------------------
@@ -202,7 +240,7 @@ if(BUILD_TESTING)
   target_link_libraries(test_pcd2grid_height ${PCL_LIBRARIES})
 
   ament_add_gtest(test_pcd2grid_free_space test/pcd2grid_free_space_test.cpp
-    src/pcd2grid_ground_plane.cpp)
+    src/pcd2grid.cpp src/pcd2grid_ground_plane.cpp)
   target_link_libraries(test_pcd2grid_free_space ${PCL_LIBRARIES} ${OpenCV_LIBRARIES})
   ament_target_dependencies(test_pcd2grid_free_space ${ANUBIS_MAPPING_ROS_DEPS})
 endif()
