@@ -4,7 +4,15 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
+
+
+def _rviz_config_path():
+    return os.path.join(
+        get_package_share_directory('anubis_localization'),
+        'rviz', 'localization_ros2.rviz'
+    )
 
 
 # Parameters that live in config/config.yaml and may be overridden from the
@@ -106,6 +114,10 @@ def generate_launch_description():
             description='Optional absolute PCD path loaded by localization at startup'
         ),
         DeclareLaunchArgument('use_sim_time', default_value='false'),
+        DeclareLaunchArgument(
+            'use_rviz', default_value='false',
+            description='Open RViz with localization_ros2.rviz pre-configured',
+        ),
         DeclareLaunchArgument('points_topic', default_value=''),
         DeclareLaunchArgument(
             'enable_vertical_velocity_prediction', default_value=''),
@@ -159,4 +171,12 @@ def generate_launch_description():
         # anubis_description/urdf/sensors.xacro). Run
         # `ros2 launch anubis_description description.launch.py`
         # alongside this launch file instead of re-publishing it here.
+
+        Node(
+            package='rviz2',
+            executable='rviz2',
+            name='rviz2',
+            arguments=['-d', _rviz_config_path()],
+            condition=IfCondition(LaunchConfiguration('use_rviz')),
+        ),
     ])
