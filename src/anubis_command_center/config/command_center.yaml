@@ -1,0 +1,35 @@
+web_bridge_node:
+  ros__parameters:
+    image_topic: "/sensors/camera/color/image_raw"
+    battery_topic: "/battery_status"
+    # map_dir intentionally NOT set here either -- YAML has no shell
+    # variable expansion, so a literal "$HOME/..." string here would be
+    # passed to the node as a literal, non-expanded string (a real bug,
+    # not a hypothetical one: caught while writing this file). The
+    # node's own declare_parameter default already correctly expands
+    # ~/anubis_maps/default via Python's os.path.expanduser() -- this
+    # comment is left here as the reminder of where it's actually set,
+    # matching anubis_bringup's ANUBIS_MAP_DIR convention.
+    #
+    # map_dir: "/home/youruser/anubis_maps/default"   # only if you need to override
+
+    # vps_url intentionally NOT set here -- same reasoning as
+    # anubis_control's local_ip: there is no sane default for "which
+    # VPS", so it must be passed explicitly (launch argument or
+    # --ros-args -p vps_url:=...) and the node fails loudly if it's
+    # left as the obviously-fake placeholder, rather than silently
+    # trying to reach something that sounds plausible.
+    #
+    # vps_url: "ws://1.2.3.4:8090/ws/robot"
+    # vps_url: "wss://your-domain.example:8090/ws/robot"   # once the VPS has TLS
+
+    # 0-100, lower = smaller/faster over a constrained 5G link
+    jpeg_quality: 60
+    # Frames wider than this are downscaled before encoding, to keep
+    # bandwidth predictable over cellular
+    max_image_width: 480
+    # How often a new frame is pushed, if a new one has arrived
+    frame_interval_s: 0.5
+    # How often battery/map-file status (and, if changed, a new map
+    # preview) is pushed
+    status_interval_s: 2.0

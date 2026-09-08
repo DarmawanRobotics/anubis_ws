@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>anubis_command_center</name>
+  <version>0.1.0</version>
+  <description>
+    Minimal web UI proof-of-concept for Anubis: subscribes to the camera
+    image and battery status, and pushes them OUT over an outbound
+    WebSocket connection to a relay running on a VPS (see the sibling
+    anubis_vps_relay, not a ROS package -- it runs on the VPS, not the
+    robot). This shape exists because the robot's cellular/5G link has
+    no public IP to accept inbound connections on -- the robot must be
+    the one that connects out. Answers one question: can an image
+    actually cross that link to a browser, or not. Deliberately simple:
+    no rosbridge_suite/roslibjs yet -- that is the natural next step for
+    real-time, bidirectional, multi-topic access, once this first
+    connectivity check is confirmed working.
+  </description>
+  <maintainer email="you@example.com">Agus Darmawan</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <depend>rclpy</depend>
+  <depend>sensor_msgs</depend>
+  <depend>cv_bridge</depend>
+  <depend>python3-opencv</depend>
+  <depend>python3-pil</depend>
+
+  <!-- websockets is a pip package, not consistently a rosdep key.
+       Install manually: pip install websockets, with the
+       system-packages override flag your OS's pip requires. -->
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
