@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>anubis_bringup</name>
+  <version>0.1.0</version>
+  <description>
+    Top-level bringup for Anubis -- tmux-based scripts that bring up
+    every subsystem package together, for two operating modes: mapping
+    (record a new map) and autonomous (localize + navigate against an
+    existing map). Deployment on the robot itself is bare-metal (no
+    Docker at runtime -- Docker is only used for development, on a
+    separate devbox). See README.md for the full operating guide.
+  </description>
+  <maintainer email="you@example.com">Agus Darmawan</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- Runtime-only: this package launches the others, it does not
+       compile against them. -->
+  <exec_depend>anubis_description</exec_depend>
+  <exec_depend>anubis_sensors</exec_depend>
+  <exec_depend>anubis_perception</exec_depend>
+  <exec_depend>anubis_control</exec_depend>
+  <exec_depend>anubis_mapping</exec_depend>
+  <exec_depend>anubis_localization</exec_depend>
+  <exec_depend>anubis_navigation</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
